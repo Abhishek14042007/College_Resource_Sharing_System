@@ -11,8 +11,28 @@ const app = express();
 const uploadsPath = path.join(__dirname, 'uploads');
 if (!fs.existsSync(uploadsPath)) fs.mkdirSync(uploadsPath, { recursive: true });
 
-// Middleware
-app.use(cors({ origin: process.env.CLIENT_URL || 'http://localhost:5173', credentials: true }));
+// Middleware - CORS configuration
+const corsOptions = {
+    origin: (origin, callback) => {
+        const allowedOrigins = [
+            'http://localhost:5173',
+            'http://localhost:3000',
+            process.env.CLIENT_URL,
+            /vercel\.app$/ // Allow all Vercel deployments
+        ].filter(Boolean);
+
+        if (!origin || allowedOrigins.some(allowed =>
+            allowed instanceof RegExp ? allowed.test(origin) : allowed === origin
+        )) {
+            callback(null, true);
+        } else {
+            callback(new Error('Not allowed by CORS'));
+        }
+    },
+    credentials: true
+};
+
+app.use(cors(corsOptions));
 app.use(express.json());
 app.use('/uploads', express.static(uploadsPath));
 
