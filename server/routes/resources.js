@@ -3,18 +3,13 @@ const router = express.Router();
 const multer = require('multer');
 const fs = require('fs');
 const path = require('path');
+const cloudinary = require('cloudinary').v2;
 const Resource = require('../models/Resource');
 const User = require('../models/User');
 const { protect } = require('../middleware/auth');
 
-const uploadsDir = path.join(__dirname, '../uploads');
-if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
-
-const storage = multer.diskStorage({
-    destination: uploadsDir,
-    filename: (req, file, cb) => cb(null, `${Date.now()}-${file.originalname.replace(/\s/g, '_')}`)
-});
-
+// Configure multer for memory storage (files will be uploaded to Cloudinary)
+const storage = multer.memoryStorage();
 const upload = multer({ storage, limits: { fileSize: 50 * 1024 * 1024 } });
 
 // Get all resources (with filters)
@@ -81,9 +76,35 @@ router.post('/', protect, upload.single('file'), async (req, res) => {
 
         let fileUrl = '';
         let storagePath = '';
+        let cloudinaryId = '';
+
         if (req.file) {
-            storagePath = req.file.filename;
-            fileUrl = `/uploads/${storagePath}`;
+            try {
+                // Upload file to Cloudinary
+                const result = await new Promise((resolve, reject) => {
+                    const uploadStream = cloudinary.uploader.upload_stream(
+                        {
+                            folder: 'crss-resources',
+                            resource_type: 'auto',
+                            public_id: `${Date.now()}-${req.file.originalname.replace(/\s/g, '_').replace(/\.[^/.]+$/, '')}`,
+                            use_filename: true,
+                            unique_filename: false
+                        },
+                        (error, result) => {
+                            if (error) reject(error);
+                            else resolve(result);
+                        }
+                    );
+                    uploadStream.end(req.file.buffer);
+                });
+
+                fileUrl = result.secure_url;
+                storagePath = result.public_id;
+                cloudinaryId = result.public_id;
+            } catch (uploadError) {
+                console.error('Cloudinary upload error:', uploadError);
+                return res.status(500).json({ message: 'Failed to upload file to cloud storage' });
+            }
         }
 
         const resource = await Resource.create({
@@ -145,30 +166,22 @@ router.put('/:id/like', protect, async (req, res) => {
     }
 });
 
-// Download file (serve file and increment counter)
+// Download file (redirect to Cloudinary and increment counter)
 router.get('/:id/download', protect, async (req, res) => {
     try {
         const resource = await Resource.findById(req.params.id);
         if (!resource) return res.status(404).json({ message: 'Resource not found' });
 
-        if (!resource.storagePath) {
+        if (!resource.fileUrl) {
             return res.status(400).json({ message: 'No file available for download' });
-        }
-
-        const filePath = path.join(uploadsDir, resource.storagePath);
-
-        if (!fs.existsSync(filePath)) {
-            return res.status(404).json({ message: 'File not found on server' });
         }
 
         // Increment download counter
         resource.downloads = (resource.downloads || 0) + 1;
         await resource.save();
 
-        // Send file with attachment header
-        res.download(filePath, resource.storagePath.split('-').slice(1).join('-'), (err) => {
-            if (err) console.error('Download error:', err);
-        });
+        // Redirect to Cloudinary URL for download
+        res.redirect(resource.fileUrl);
     } catch (err) {
         res.status(500).json({ message: err.message });
     }
@@ -233,10 +246,13 @@ router.delete('/:id', protect, async (req, res) => {
             return res.status(403).json({ message: 'Not authorized' });
         }
 
+        // Delete file from Cloudinary if it exists
         if (resource.storagePath) {
-            const localFilePath = path.join(uploadsDir, resource.storagePath);
-            if (fs.existsSync(localFilePath)) {
-                fs.unlinkSync(localFilePath);
+            try {
+                await cloudinary.uploader.destroy(resource.storagePath);
+            } catch (cloudinaryError) {
+                console.error('Cloudinary delete error:', cloudinaryError);
+                // Don't fail the entire operation if Cloudinary delete fails
             }
         }
 
