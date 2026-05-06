@@ -1,10 +1,12 @@
-import { useEffect, useState } from 'react';
+import { useContext, useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
+import { AuthContext } from '../../Leaderboard/context/AuthContext';
 import api from '../api';
 
 const ResourceDetail = () => {
     const { id } = useParams();
     const navigate = useNavigate();
+    const { user } = useContext(AuthContext);
     const [resource, setResource] = useState(null);
     const [loading, setLoading] = useState(true);
     const [liked, setLiked] = useState(false);
@@ -57,6 +59,18 @@ const ResourceDetail = () => {
             setSaved(response.data.saved);
         } catch (error) {
             console.error('Save error:', error);
+        }
+    };
+
+    const handleDelete = async () => {
+        if (!window.confirm('Delete this resource? This cannot be undone.')) return;
+
+        try {
+            await api.delete(`/resources/${id}`);
+            navigate('/resources');
+        } catch (error) {
+            console.error('Delete error:', error);
+            alert('Failed to delete resource');
         }
     };
 
@@ -113,6 +127,9 @@ const ResourceDetail = () => {
                     )}
                     <button onClick={handleLike} style={{ background: liked ? '#ec4899' : '#cbd5e1', color: liked ? '#fff' : '#000', border: 'none', padding: '12px 24px', borderRadius: '8px', cursor: 'pointer', fontWeight: '600' }}>👍 {liked ? 'Unlike' : 'Like'}</button>
                     <button onClick={handleSave} style={{ background: saved ? '#f59e0b' : '#cbd5e1', color: saved ? '#fff' : '#000', border: 'none', padding: '12px 24px', borderRadius: '8px', cursor: 'pointer', fontWeight: '600' }}>⭐ {saved ? 'Unsave' : 'Save'}</button>
+                    {user && resource.uploader && user._id === resource.uploader._id && (
+                        <button onClick={handleDelete} style={{ background: '#dc2626', color: '#fff', border: 'none', padding: '12px 24px', borderRadius: '8px', cursor: 'pointer', fontWeight: '600' }}>🗑️ Delete</button>
+                    )}
                 </div>
 
                 {resource.tags && resource.tags.length > 0 && (

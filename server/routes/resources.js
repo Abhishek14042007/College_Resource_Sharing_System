@@ -1,8 +1,6 @@
 const express = require('express');
 const router = express.Router();
 const multer = require('multer');
-const fs = require('fs');
-const path = require('path');
 const cloudinary = require('cloudinary').v2;
 const Resource = require('../models/Resource');
 const User = require('../models/User');
@@ -76,7 +74,6 @@ router.post('/', protect, upload.single('file'), async (req, res) => {
 
         let fileUrl = '';
         let storagePath = '';
-        let cloudinaryId = '';
 
         if (req.file) {
             try {
