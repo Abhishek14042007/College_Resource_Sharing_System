@@ -1,5 +1,7 @@
 const express = require('express');
 const router = express.Router();
+const http = require('http');
+const https = require('https');
 const multer = require('multer');
 const cloudinary = require('cloudinary').v2;
 const Resource = require('../models/Resource');
@@ -163,7 +165,7 @@ router.put('/:id/like', protect, async (req, res) => {
     }
 });
 
-// Download file (redirect to Cloudinary and increment counter)
+// Download file (proxy Cloudinary file through the server and increment counter)
 router.get('/:id/download', protect, async (req, res) => {
     try {
         const resource = await Resource.findById(req.params.id);
@@ -173,12 +175,26 @@ router.get('/:id/download', protect, async (req, res) => {
             return res.status(400).json({ message: 'No file available for download' });
         }
 
-        // Increment download counter
         resource.downloads = (resource.downloads || 0) + 1;
         await resource.save();
 
-        // Redirect to Cloudinary URL for download
-        res.redirect(resource.fileUrl);
+        const fileUrl = new URL(resource.fileUrl);
+        const client = fileUrl.protocol === 'https:' ? https : http;
+
+        client.get(fileUrl.toString(), (cloudRes) => {
+            if (cloudRes.statusCode !== 200) {
+                console.error('Cloudinary proxy error:', cloudRes.statusCode);
+                return res.status(cloudRes.statusCode).send('Unable to download file');
+            }
+
+            res.setHeader('Content-Type', cloudRes.headers['content-type'] || 'application/octet-stream');
+            const filename = fileUrl.pathname.split('/').pop() || 'download';
+            res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+            cloudRes.pipe(res);
+        }).on('error', (err) => {
+            console.error('Cloudinary request error:', err);
+            res.status(500).json({ message: 'Failed to retrieve file from cloud storage' });
+        });
     } catch (err) {
         res.status(500).json({ message: err.message });
     }
