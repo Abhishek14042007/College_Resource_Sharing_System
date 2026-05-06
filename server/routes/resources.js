@@ -85,6 +85,7 @@ router.post('/', protect, upload.single('file'), async (req, res) => {
                         {
                             folder: 'crss-resources',
                             resource_type: 'auto',
+                            type: 'upload',
                             public_id: `${Date.now()}-${req.file.originalname.replace(/\s/g, '_').replace(/\.[^/.]+$/, '')}`,
                             use_filename: true,
                             unique_filename: false
