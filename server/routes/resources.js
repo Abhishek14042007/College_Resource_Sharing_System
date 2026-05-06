@@ -86,6 +86,8 @@ router.post('/', protect, upload.single('file'), async (req, res) => {
                         {
                             folder: 'crss-resources',
                             resource_type: 'auto',
+                            type: 'upload',
+                            access_mode: 'public',
                             public_id: `${Date.now()}-${req.file.originalname.replace(/\s/g, '_').replace(/\.[^/.]+$/, '')}`,
                             use_filename: true,
                             unique_filename: false
@@ -179,8 +181,12 @@ router.get('/:id/download', protect, async (req, res) => {
         resource.downloads = (resource.downloads || 0) + 1;
         await resource.save();
 
+        const downloadUrl = cloudinary.utils && typeof cloudinary.utils.download_url === 'function'
+            ? cloudinary.utils.download_url(resource.storagePath, { resource_type: 'auto', secure: true, type: 'upload' })
+            : cloudinary.url(resource.storagePath, { resource_type: 'auto', secure: true, sign_url: true, type: 'upload' });
+
         const MAX_REDIRECTS = 5;
-        const fileUrl = new URL(resource.fileUrl);
+        const fileUrl = new URL(downloadUrl);
 
         const fetchUrl = (url, redirects = 0) => {
             if (redirects > MAX_REDIRECTS) {
@@ -199,7 +205,7 @@ router.get('/:id/download', protect, async (req, res) => {
                 }
 
                 if (cloudRes.statusCode !== 200) {
-                    console.error('Cloudinary proxy error:', cloudRes.statusCode);
+                    console.error('Cloudinary proxy error:', cloudRes.statusCode, 'url=', url.toString());
                     return res.status(cloudRes.statusCode).send('Unable to download file');
                 }
 
