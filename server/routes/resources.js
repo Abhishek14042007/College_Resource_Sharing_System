@@ -181,12 +181,8 @@ router.get('/:id/download', protect, async (req, res) => {
         resource.downloads = (resource.downloads || 0) + 1;
         await resource.save();
 
-        const downloadUrl = cloudinary.utils && typeof cloudinary.utils.download_url === 'function'
-            ? cloudinary.utils.download_url(resource.storagePath, { resource_type: 'auto', secure: true, type: 'upload' })
-            : cloudinary.url(resource.storagePath, { resource_type: 'auto', secure: true, sign_url: true, type: 'upload' });
-
         const MAX_REDIRECTS = 5;
-        const fileUrl = new URL(downloadUrl);
+        const fileUrl = new URL(resource.fileUrl);
 
         const fetchUrl = (url, redirects = 0) => {
             if (redirects > MAX_REDIRECTS) {
@@ -194,7 +190,7 @@ router.get('/:id/download', protect, async (req, res) => {
             }
 
             const client = url.protocol === 'https:' ? https : http;
-            client.get(url, (cloudRes) => {
+            client.get(url, { timeout: 30000 }, (cloudRes) => {
                 if ([301, 302, 303, 307, 308].includes(cloudRes.statusCode)) {
                     const nextUrl = cloudRes.headers.location;
                     if (!nextUrl) {
@@ -214,7 +210,7 @@ router.get('/:id/download', protect, async (req, res) => {
                 res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
                 cloudRes.pipe(res);
             }).on('error', (err) => {
-                console.error('Cloudinary request error:', err);
+                console.error('Cloudinary request error:', err.message);
                 res.status(500).json({ message: 'Failed to retrieve file from cloud storage' });
             });
         };
