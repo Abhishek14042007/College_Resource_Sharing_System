@@ -29,14 +29,8 @@ const ResourceDetail = () => {
 
     const handleDownload = async () => {
         try {
-            const response = await api.get(`/resources/${id}/download`, { responseType: 'blob' });
-            const url = window.URL.createObjectURL(new Blob([response.data]));
-            const link = document.createElement('a');
-            link.href = url;
-            link.setAttribute('download', resource.storagePath?.split('-').slice(1).join('-') || 'download');
-            document.body.appendChild(link);
-            link.click();
-            link.parentNode.removeChild(link);
+            // Simple redirect to download endpoint which will redirect to Cloudinary
+            window.location.href = `${api.defaults.baseURL}/resources/${id}/download`;
         } catch (error) {
             console.error('Download error:', error);
             alert('Failed to download file');

@@ -1,7 +1,5 @@
 const express = require('express');
 const router = express.Router();
-const http = require('http');
-const https = require('https');
 const multer = require('multer');
 const cloudinary = require('cloudinary').v2;
 const Resource = require('../models/Resource');
@@ -168,7 +166,7 @@ router.put('/:id/like', protect, async (req, res) => {
     }
 });
 
-// Download file (proxy Cloudinary file through the server and increment counter)
+// Download file (redirect to Cloudinary and increment counter)
 router.get('/:id/download', protect, async (req, res) => {
     try {
         const resource = await Resource.findById(req.params.id);
@@ -181,41 +179,8 @@ router.get('/:id/download', protect, async (req, res) => {
         resource.downloads = (resource.downloads || 0) + 1;
         await resource.save();
 
-        const MAX_REDIRECTS = 5;
-        const fileUrl = new URL(resource.fileUrl);
-
-        const fetchUrl = (url, redirects = 0) => {
-            if (redirects > MAX_REDIRECTS) {
-                return res.status(500).json({ message: 'Too many redirects while downloading the file' });
-            }
-
-            const client = url.protocol === 'https:' ? https : http;
-            client.get(url, { timeout: 30000 }, (cloudRes) => {
-                if ([301, 302, 303, 307, 308].includes(cloudRes.statusCode)) {
-                    const nextUrl = cloudRes.headers.location;
-                    if (!nextUrl) {
-                        console.error('Cloudinary redirect missing location header');
-                        return res.status(500).json({ message: 'Invalid redirect from cloud storage' });
-                    }
-                    return fetchUrl(new URL(nextUrl), redirects + 1);
-                }
-
-                if (cloudRes.statusCode !== 200) {
-                    console.error('Cloudinary proxy error:', cloudRes.statusCode, 'url=', url.toString());
-                    return res.status(cloudRes.statusCode).send('Unable to download file');
-                }
-
-                res.setHeader('Content-Type', cloudRes.headers['content-type'] || 'application/octet-stream');
-                const filename = fileUrl.pathname.split('/').pop() || 'download';
-                res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
-                cloudRes.pipe(res);
-            }).on('error', (err) => {
-                console.error('Cloudinary request error:', err.message);
-                res.status(500).json({ message: 'Failed to retrieve file from cloud storage' });
-            });
-        };
-
-        fetchUrl(fileUrl);
+        // Redirect to Cloudinary secure URL for download
+        res.redirect(resource.fileUrl);
     } catch (err) {
         res.status(500).json({ message: err.message });
     }
