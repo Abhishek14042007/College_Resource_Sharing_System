@@ -5,8 +5,31 @@ const ResourceCard = ({ resource, onLike, onSave }) => {
     const handleDownload = async (e) => {
         e.preventDefault();
         try {
-            // Simple redirect to download endpoint which will redirect to Cloudinary
-            window.location.href = `${api.defaults.baseURL}/resources/${resource._id}/download`;
+            const token = localStorage.getItem('crssUser') ? JSON.parse(localStorage.getItem('crssUser')).token : null;
+            if (!token) {
+                alert('Please log in to download files');
+                return;
+            }
+
+            const response = await fetch(`${api.defaults.baseURL}/resources/${resource._id}/download`, {
+                headers: {
+                    'Authorization': `Bearer ${token}`
+                }
+            });
+
+            if (!response.ok) {
+                throw new Error('Download failed');
+            }
+
+            const blob = await response.blob();
+            const url = window.URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.setAttribute('download', resource.title || 'download');
+            document.body.appendChild(link);
+            link.click();
+            link.parentNode.removeChild(link);
+            window.URL.revokeObjectURL(url);
         } catch (error) {
             console.error('Download error:', error);
             alert('Failed to download file');

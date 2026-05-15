@@ -179,8 +179,8 @@ router.get('/:id/download', protect, async (req, res) => {
         resource.downloads = (resource.downloads || 0) + 1;
         await resource.save();
 
-        // Redirect to Cloudinary secure URL for download
-        res.redirect(resource.fileUrl);
+        // Return redirect response so browser follows to Cloudinary
+        return res.redirect(resource.fileUrl);
     } catch (err) {
         res.status(500).json({ message: err.message });
     }
